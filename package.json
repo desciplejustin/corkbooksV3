@@ -1,0 +1,28 @@
+{
+    "name":  "corkbookv3",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "scripts":  {
+                    "dev":  "vite",
+                    "dev:worker":  "wrangler dev",
+                    "build":  "vite build",
+                    "preview":  "vite preview",
+                    "deploy":  "vite build \u0026\u0026 wrangler deploy",
+                    "cf-typegen":  "wrangler types"
+                },
+    "dependencies":  {
+                         "react":  "latest",
+                         "react-dom":  "latest",
+                         "react-router-dom":  "latest",
+                         "vite-plugin-pwa":  "latest",
+                         "workbox-window":  "latest"
+                     },
+    "devDependencies":  {
+                            "@cloudflare/workers-types":  "latest",
+                            "@vitejs/plugin-react":  "latest",
+                            "typescript":  "latest",
+                            "vite":  "latest",
+                            "wrangler":  "latest"
+                        }
+}
