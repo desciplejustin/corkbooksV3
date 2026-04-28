@@ -14,13 +14,13 @@
     "dependencies":  {
                          "react":  "latest",
                          "react-dom":  "latest",
-                         "react-router-dom":  "latest",
-                         "vite-plugin-pwa":  "latest",
-                         "workbox-window":  "latest"
+                         "react-router-dom":  "latest"
                      },
     "devDependencies":  {
                             "@cloudflare/workers-types":  "latest",
                             "@vitejs/plugin-react":  "latest",
+                            "@types/react":  "latest",
+                            "@types/react-dom":  "latest",
                             "typescript":  "latest",
                             "vite":  "latest",
                             "wrangler":  "latest"

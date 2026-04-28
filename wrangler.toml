@@ -1,0 +1,11 @@
+name = "corkbookv3"
+main = "index.ts"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "corkbookv3_db"
+database_id = "f577c5f0-ecbd-4060-b87f-dbb720147b58"
+
+[vars]
+ENVIRONMENT = "development"
