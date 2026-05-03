@@ -18,17 +18,23 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Get origin for CORS (supports both local dev ports)
+    // Get origin for CORS (supports local dev and production)
     const origin = request.headers.get('Origin') || '';
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'https://corkbookv3.pages.dev', // Cloudflare Pages default
     ];
     
-    const corsOrigin = allowedOrigins.includes(origin) ? origin : 'http://localhost:3000';
+    // Allow any *.pages.dev subdomain or configured origin
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.pages.dev') ||
+                      (origin.startsWith('https://') && origin.includes('corkbook'));
+    
+    const corsOrigin = isAllowed ? origin : allowedOrigins[0];
 
-    // CORS headers for development
+    // CORS headers
     const corsHeaders = {
       'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',

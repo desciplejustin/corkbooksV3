@@ -83,10 +83,16 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
       data: userPublic,
     });
 
-    response.headers.set(
-      'Set-Cookie',
-      `auth_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`
-    );
+    // Use SameSite=None; Secure for production cross-origin requests
+    // Check if we're in production (request uses https)
+    const url = new URL(request.url);
+    const isProduction = url.protocol === 'https:';
+    
+    const cookieSettings = isProduction
+      ? `auth_token=${token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${7 * 24 * 60 * 60}`
+      : `auth_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`;
+
+    response.headers.set('Set-Cookie', cookieSettings);
 
     return response;
   } catch (error) {
@@ -104,9 +110,10 @@ export async function handleLogout(): Promise<Response> {
     data: null,
   });
 
+  // Clear cookie with same settings used to set it
   response.headers.set(
     'Set-Cookie',
-    'auth_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0'
+    'auth_token=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0'
   );
 
   return response;
