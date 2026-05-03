@@ -34,7 +34,7 @@ export const navItems: NavItem[] = [
   },
   {
     label: 'Reports',
-    path: '/reports',
+    path: '/reconciliation',
     requiresAuth: true,
   },
 ];

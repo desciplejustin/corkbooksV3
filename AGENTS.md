@@ -293,3 +293,6 @@ But clarity, correctness, and maintainability matter more.
 
 Build something that works end-to-end first.
 Then improve it.
+
+# Deploy rules
+1. Don't deploy to cloudfare unless asked to

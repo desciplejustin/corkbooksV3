@@ -32,11 +32,19 @@ Hosting: Cloudflare (Pages + Workers)
 - [x] **Test & Deploy:** Ensure basic data entry and retrieval works, then deploy the first usable slice to Cloudflare
 
 ### Phase 3 - The Import Engine
-- [ ] Update schema with `imports`, `staged_transactions`, and `allocation_rules` tables
-- [ ] Build CSV upload and parsing logic
-- [ ] Implement minimal auto-suggestion logic using exact or contains rule matching during import
-- [ ] Build API endpoint to receive parsed rows and stage them
-- [ ] Create Frontend Import Transactions page with CSV upload
+- [x] Update schema with `bank_import_configs`, `imports`, `staged_transactions`, `allocation_rules`, and `transactions` tables
+- [x] Create migration file (0005_import_tables.sql) with all Phase 3 tables
+- [x] Apply migration to local database
+- [x] Add TypeScript types for all Phase 3 entities
+- [x] Build CSV parser utility with support for multiple formats
+- [x] Create import configuration API routes (CRUD for bank_import_configs)
+- [x] Create imports API routes (upload, list, get, staged transactions, update staged, finalize)
+- [x] Add all new routes to main router (index.ts)
+- [x] Verify backend compiles and runs without errors
+- [ ] Build Frontend Import Configuration page (link to bank account setup)
+- [ ] Build Frontend CSV Upload page with bank account selection
+- [ ] Build Frontend Staging Review table with inline category assignment
+- [ ] Implement minimal auto-suggestion logic using allocation rules
 - [ ] **Test:** Upload a sample CSV and verify rows reach the staging area safely
 
 ### Phase 4 - Review & Finalise Flow
@@ -109,4 +117,43 @@ Agent must update this section after each completed phase.
   - ✅ CORS updated to support production domains
   - ✅ Cookie authentication fixed for cross-origin (SameSite=None; Secure)
   - ✅ **TESTED:** Login, categories, and bank accounts working in production
-- Next: Phase 3 - Import Engine
+- **Phase 3 Backend Complete (In Progress) 🔄**
+  - ✅ Database schema designed for multi-format import support (CSV, PDF, OFX, QIF)
+  - ✅ Migration 0005_import_tables.sql created with 6 tables:
+    - bank_import_configs: Store format and parser configuration per bank
+    - imports: Track upload sessions with metadata
+    - staged_transactions: Temporary review area before finalization
+    - allocation_rules: Rule-based auto-suggestions
+    - transactions: Final ledger entries
+  - ✅ Migration applied to local database successfully
+  - ✅ TypeScript types added for all Phase 3 entities
+  - ✅ CSV parser utility created (utils/csv-parser.ts):
+    - Supports custom delimiters, headers, date formats
+    - Handles separate debit/credit columns or single amount column
+    - Parses amounts with currency symbols and parentheses
+    - Provides detailed error messages
+  - ✅ Import configuration API routes (routes/import-configs.ts):
+    - GET /api/import-configs (list all or filter by bank account)
+    - POST /api/import-configs (create with JSON parser config)
+    - GET /api/import-configs/:id (get single config)
+    - PATCH /api/import-configs/:id (update config)
+  - ✅ Imports API routes (routes/imports.ts):
+    - POST /api/imports/upload (upload CSV with FormData)
+    - GET /api/imports (list with filters)
+    - GET /api/imports/:id (get single import)
+    - GET /api/imports/:id/staged-transactions (review area)
+    - PATCH /api/staged-transactions/:id (assign categories)
+    - POST /api/imports/:id/finalize (move to final ledger)
+  - ✅ All routes registered in index.ts
+  - ✅ Backend tested and runs without compilation errors
+  - ✅ **R2 file storage added** – original statement files saved to `corkbookv3-statements` R2 bucket
+    - `storage/index.ts` implements `saveStatementFile`, `getStatementFile`, `deleteStatementFile`
+    - Upload handler saves raw file to R2, stores key in `imports.source_file_key`
+    - Download endpoint: GET `/api/imports/:id/download` streams original file
+    - Migration 0006 adds `source_file_key` column to imports table
+  - ✅ **Frontend Phase 3 pages built and compiled**
+    - `/imports` – list all imports with status badges and download links
+    - `/imports/new` – upload form with bank account selection, month picker, drag-friendly file input
+    - `/imports/:id/review` – inline category assignment, scope, tax flag, flag for review, finalize button
+  - ✅ **DOCUMENTATION:** TESTING_PHASE3.md created with API examples
+  - 🔄 **Next:** Apply production migrations, deploy, test end-to-end

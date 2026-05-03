@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Custom design tokens */
+@theme {
+  --color-brand: #2563eb;
+  --color-brand-dark: #1d4ed8;
+  --color-sidebar: #1e293b;
+  --color-sidebar-hover: #334155;
+  --color-sidebar-active: #2563eb;
+}

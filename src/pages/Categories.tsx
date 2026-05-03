@@ -101,265 +101,177 @@ export function Categories() {
     return true;
   });
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>;
+  if (loading) return <div className="p-6 text-gray-500">Loading…</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0 }}>Categories</h1>
+    <div className="p-6 max-w-5xl">
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-800">Categories</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
         >
           {showForm ? 'Cancel' : '+ New Category'}
         </button>
       </div>
 
       {error && (
-        <div style={{
-          padding: '1rem',
-          backgroundColor: '#fee',
-          color: '#c33',
-          borderRadius: '4px',
-          marginBottom: '1rem',
-        }}>
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 text-sm mb-4">
           {error}
         </div>
       )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} style={{
-          padding: '1.5rem',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '8px',
-          marginBottom: '2rem',
-        }}>
-          <h3 style={{ marginTop: 0 }}>{editingId ? 'Edit Category' : 'New Category'}</h3>
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-xl p-5 mb-4">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">{editingId ? 'Edit Category' : 'New Category'}</h3>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Type *
-            </label>
-            <select
-              value={formData.category_type}
-              onChange={(e) => setFormData({ ...formData, category_type: e.target.value as 'income' | 'expense' })}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Scope *
-            </label>
-            <select
-              value={formData.scope}
-              onChange={(e) => setFormData({ ...formData, scope: e.target.value as 'personal' | 'business' | 'shared' })}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            >
-              <option value="personal">Personal</option>
-              <option value="business">Business</option>
-              <option value="shared">Shared</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
               <input
-                type="checkbox"
-                checked={formData.sars_related === 1}
-                onChange={(e) => setFormData({ ...formData, sars_related: e.target.checked ? 1 : 0 })}
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <span>SARS Tax Related</span>
-            </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <select
+                value={formData.category_type}
+                onChange={(e) => setFormData({ ...formData, category_type: e.target.value as 'income' | 'expense' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scope *</label>
+              <select
+                value={formData.scope}
+                onChange={(e) => setFormData({ ...formData, scope: e.target.value as 'personal' | 'business' | 'shared' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="personal">Personal</option>
+                <option value="business">Business</option>
+                <option value="shared">Shared</option>
+              </select>
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.sars_related === 1}
+                  onChange={(e) => setFormData({ ...formData, sars_related: e.target.checked ? 1 : 0 })}
+                  className="rounded"
+                />
+                SARS Tax Related
+              </label>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button
-              type="submit"
-              style={{
-                padding: '0.5rem 1.5rem',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
+          <div className="flex gap-2">
+            <button type="submit" className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
               {editingId ? 'Update' : 'Create'}
             </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              style={{
-                padding: '0.5rem 1.5rem',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
+            <button type="button" onClick={resetForm} className="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors">
               Cancel
             </button>
           </div>
         </form>
       )}
 
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <div>
-          <label style={{ marginRight: '0.5rem', fontWeight: 'bold' }}>Type:</label>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
-            style={{ padding: '0.25rem 0.5rem' }}
-          >
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-4">
+        <div className="flex items-center gap-2 text-sm">
+          <label className="font-medium text-gray-600">Type:</label>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="all">All</option>
             <option value="income">Income</option>
             <option value="expense">Expense</option>
           </select>
         </div>
-        <div>
-          <label style={{ marginRight: '0.5rem', fontWeight: 'bold' }}>Scope:</label>
-          <select
-            value={filterScope}
-            onChange={(e) => setFilterScope(e.target.value as any)}
-            style={{ padding: '0.25rem 0.5rem' }}
-          >
+        <div className="flex items-center gap-2 text-sm">
+          <label className="font-medium text-gray-600">Scope:</label>
+          <select value={filterScope} onChange={(e) => setFilterScope(e.target.value as any)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="all">All</option>
             <option value="personal">Personal</option>
             <option value="business">Business</option>
             <option value="shared">Shared</option>
           </select>
         </div>
-        <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-            />
-            <span style={{ fontWeight: 'bold' }}>Show Inactive</span>
-          </label>
-        </div>
+        <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded" />
+          Show Inactive
+        </label>
       </div>
 
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        backgroundColor: 'white',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f8f9fa' }}>
-            <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Name</th>
-            <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Type</th>
-            <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Scope</th>
-            <th style={{ padding: '1rem', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>SARS</th>
-            <th style={{ padding: '1rem', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Active</th>
-            <th style={{ padding: '1rem', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredCategories.length === 0 ? (
-            <tr>
-              <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#6c757d' }}>
-                No categories found
-              </td>
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b-2 border-gray-100">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Scope</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">SARS</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
             </tr>
-          ) : (
-            filteredCategories.map((category) => (
-              <tr key={category.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                <td style={{ padding: '1rem' }}>{category.name}</td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                    backgroundColor: category.category_type === 'income' ? '#d4edda' : '#f8d7da',
-                    color: category.category_type === 'income' ? '#155724' : '#721c24',
-                  }}>
-                    {category.category_type}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem', textTransform: 'capitalize' }}>{category.scope}</td>
-                <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  {category.sars_related === 1 ? '✓' : '-'}
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  <button
-                    onClick={() => toggleActive(category)}
-                    style={{
-                      padding: '0.25rem 0.75rem',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      backgroundColor: category.is_active === 1 ? '#28a745' : '#dc3545',
-                      color: 'white',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {category.is_active === 1 ? 'Active' : 'Inactive'}
-                  </button>
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  <button
-                    onClick={() => handleEdit(category)}
-                    style={{
-                      padding: '0.25rem 0.75rem',
-                      backgroundColor: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Edit
-                  </button>
-                </td>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filteredCategories.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-gray-400">No categories found</td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              filteredCategories.map((category) => (
+                <tr key={category.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-800">{category.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      category.category_type === 'income'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {category.category_type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 capitalize text-gray-600">{category.scope}</td>
+                  <td className="px-4 py-3 text-center">
+                    {category.sars_related === 1
+                      ? <span className="text-green-600 font-semibold">✓</span>
+                      : <span className="text-gray-300">–</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => toggleActive(category)}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer border-0 ${
+                        category.is_active === 1
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {category.is_active === 1 ? 'Active' : 'Inactive'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleEdit(category)}
+                      className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
