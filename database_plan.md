@@ -64,6 +64,59 @@ Validation Rules:
 - Account numbers should be stored masked for display purposes.
 - Name should be user-friendly and unique enough for selection.
 
+### Table: bank_import_configs
+Purpose:
+- Stores the import configuration for each bank (format type, parser rules, field mappings).
+- Allows different banks to use different import formats (CSV, PDF, OFX, etc.).
+
+Fields:
+- id: text, primary key
+- bank_account_id: text, required, foreign key to bank_accounts.id
+- format_type: text, required, values `csv`, `pdf`, `ofx`, `qif`
+- parser_config: text, required (JSON string with format-specific configuration)
+- is_active: integer, required, default `1`
+- created_at: text, required ISO timestamp
+- updated_at: text, required ISO timestamp
+
+Parser Config JSON Structure (examples):
+```json
+// For CSV:
+{
+  "delimiter": ",",
+  "hasHeader": true,
+  "dateColumn": "Date",
+  "dateFormat": "DD/MM/YYYY",
+  "descriptionColumn": "Description",
+  "amountColumn": "Amount",
+  "debitColumn": "Debit",
+  "creditColumn": "Credit",
+  "referenceColumn": "Reference",
+  "skipRows": 0
+}
+
+// For PDF:
+{
+  "pdfType": "discover_statement",
+  "transactionTableStart": "Date Description Amount",
+  "dateFormat": "DD MMM",
+  "amountPattern": "R\\d+\\.\\d{2}"
+}
+```
+
+Relationships:
+- One bank account has one active import config.
+- One import config belongs to one bank account.
+
+Indexes:
+- index on bank_account_id
+- index on format_type
+- index on is_active
+
+Validation Rules:
+- Format type must be one of the supported formats.
+- Parser config must be valid JSON.
+- Only one active config per bank account.
+
 ### Table: categories
 Purpose:
 - Stores the categories used for allocation and reporting.
@@ -97,13 +150,15 @@ Validation Rules:
 
 ### Table: imports
 Purpose:
-- Stores each uploaded CSV import session.
+- Stores each uploaded file import session (CSV, PDF, etc.).
 
 Fields:
 - id: text, primary key
 - bank_account_id: text, required, foreign key to bank_accounts.id
+- import_config_id: text, required, foreign key to bank_import_configs.id
 - uploaded_by_user_id: text, required, foreign key to users.id
 - source_filename: text, required
+- source_format: text, required, values `csv`, `pdf`, `ofx`, `qif`
 - statement_month: text, required, format `YYYY-MM`
 - period_start: text, nullable
 - period_end: text, nullable
@@ -115,18 +170,22 @@ Fields:
 
 Relationships:
 - One import belongs to one bank account.
+- One import uses one import config.
 - One import belongs to one user.
 - One import contains many staged transactions.
 - One finalised import produces many final transactions.
 
 Indexes:
 - index on bank_account_id
+- index on import_config_id
 - index on uploaded_by_user_id
 - index on statement_month
 - index on status
+- index on source_format
 
 Validation Rules:
 - Source file name must be present.
+- Source format must match the config format type.
 - Statement month must be valid.
 - Import cannot be finalised unless all staged rows are allocated.
 
@@ -262,10 +321,12 @@ Validation Rules:
 
 - users -> imports: one-to-many
 - users -> allocation_rules: one-to-many
+- bank_accounts -> bank_import_configs: one-to-one (active)
 - bank_accounts -> imports: one-to-many
 - bank_accounts -> staged_transactions: one-to-many
 - bank_accounts -> transactions: one-to-many
 - bank_accounts -> allocation_rules: one-to-many, optional
+- bank_import_configs -> imports: one-to-many
 - categories -> staged_transactions: one-to-many
 - categories -> transactions: one-to-many
 - categories -> allocation_rules: one-to-many
@@ -278,12 +339,35 @@ Validation Rules:
 
 - No separate roles table.
 - No budget tables yet.
-- No import template tables yet.
 - No full double-entry accounting model.
 - No transaction split table in V1. Use `shared` scope where needed and add true splits later if required.
+- **CSV parsing only in Phase 3** - PDF and other formats added later.
+- Import configs stored but PDF parser not implemented until later phase.
+
+## Multi-Format Import Strategy
+
+### Phase 3 (Current): CSV Implementation
+- Create `bank_import_configs` table schema
+- Implement CSV parser only
+- Store parser_config JSON for CSV format
+- Test with CSV files from different banks
+
+### Future Phase: PDF Support
+- Implement PDF parsing library integration
+- Add PDF-specific parser logic
+- Extract text from PDF statements
+- Parse tables/transaction data
+- Use stored parser_config to handle bank-specific PDF layouts
+
+### Future Phase: Other Formats
+- OFX (Open Financial Exchange)
+- QIF (Quicken Interchange Format)
+- Direct bank API integration
 
 ## Notes
 
 - Keep staging and final ledger separate.
 - Preserve raw import row data for auditability.
 - Keep the first version explicit and easy to reason about.
+- Design for multiple formats but implement incrementally.
+- Each bank can have its own parser configuration.

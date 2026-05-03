@@ -107,4 +107,6 @@ Agent must update this section after each completed phase.
   - ✅ Production D1 database migrated and seeded
   - ✅ JWT_SECRET configured as Worker secret
   - ✅ CORS updated to support production domains
+  - ✅ Cookie authentication fixed for cross-origin (SameSite=None; Secure)
+  - ✅ **TESTED:** Login, categories, and bank accounts working in production
 - Next: Phase 3 - Import Engine
