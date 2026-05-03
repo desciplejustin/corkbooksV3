@@ -62,6 +62,36 @@ Returns:
 - Unallocated transactions count.
 - Recent imports.
 
+### Reconciliation
+
+#### GET /api/reconciliation
+Purpose:
+- Return a bank reconciliation report for a specific account and date range.
+- Compares the running balance captured from the bank statement against the sum of transactions in the period.
+
+Query params:
+- bank_account_id (required)
+- date_from (required, YYYY-MM-DD)
+- date_to (required, YYYY-MM-DD)
+
+Returns:
+- opening_balance: last balance captured before date_from
+- closing_balance: last balance captured at or before date_to
+- total_in: sum of money_in in period
+- total_out: sum of money_out in period
+- transaction_count: number of finalised transactions in period
+- computed_closing: opening_balance + total_in − total_out
+- variance: closing_balance − computed_closing
+- balanced: true if variance rounds to 0
+- has_balance_data: false if no balance column data exists yet (pre-migration imports)
+
+Validation:
+- All three params are required.
+- bank_account_id must exist.
+
+Auth:
+- Requires authentication (any role).
+
 ### Bank Accounts
 
 #### GET /api/bank-accounts

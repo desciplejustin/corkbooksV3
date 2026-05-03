@@ -69,7 +69,7 @@
 * Money in
 * Money out
 * Suggested category
-* Status: allocated / unallocated
+* Status: allocated / unallocated / needs review / duplicate / transfer
 
 **Fields per transaction**
 
@@ -86,7 +86,9 @@
 * Mark as business
 * Split transaction
 * Save draft
-* Finalise import only when all rows are allocated
+* Finalise import — partial allowed (unallocated rows remain staged)
+* **+ New Category button in toolbar** — opens quick-add modal without leaving the page; new category immediately appears in all dropdowns on save
+* Per-row + icon — same modal, but auto-selects the new category for that row after save
 
 ---
 
@@ -206,6 +208,38 @@
 * View report
 * Export PDF
 * Export CSV
+
+---
+
+### 9a. Bank Reconciliation (Built ✅)
+
+**Purpose:** Verify that the running balance from the bank statement matches the sum of imported transactions for a period. Catches missing transactions or import gaps.
+
+**Route:** `/reconciliation`
+
+**Shows**
+
+* Account picker
+* Date range (from / to)
+* Opening balance (last balance before period start)
+* + Total money in during period
+* − Total money out during period
+* = Computed closing balance
+* Statement closing balance (last actual balance at/before period end)
+* Variance (computed vs statement)
+* Status indicator: balanced (green ✓) or out of balance (red ⚠ with amount)
+* Summary cards: transaction count, total in, total out, net
+
+**Actions**
+
+* Select account
+* Set date range
+* View result
+
+**Notes**
+
+* Only works for imports processed after migration 0008 (balance column).
+* Pre-migration imports show `has_balance_data: false` warning.
 
 ---
 

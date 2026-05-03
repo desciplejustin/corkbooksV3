@@ -4,6 +4,19 @@
 
 Store imported bank transactions safely in a staging area, force allocation before final import, keep a clean final ledger, and support simple repeat-allocation rules.
 
+## Applied Migrations
+
+| File | Description | Status |
+|------|-------------|--------|
+| 0001_init.sql | Users table, seed admin/editor | ✅ local + prod |
+| 0002_seed.sql | Additional seed data | ✅ local + prod |
+| 0003_categories_and_bank_accounts.sql | categories + bank_accounts tables | ✅ local + prod |
+| 0004_seed_categories_and_accounts.sql | Seed categories and accounts | ✅ local + prod |
+| 0005_import_tables.sql | bank_import_configs, imports, staged_transactions, allocation_rules, transactions | ✅ local + prod |
+| 0006_source_file_key.sql | source_file_key column on imports (R2 storage) | ✅ local + prod |
+| 0007_*.sql | Additional import/review fields | ✅ local |
+| 0008_add_balance_column.sql | balance REAL on staged_transactions + transactions | ✅ local — ⏳ prod pending |
+
 ## Tables Required
 
 ### Table: users
@@ -96,10 +109,13 @@ Parser Config JSON Structure (examples):
 
 // For PDF:
 {
-  "pdfType": "discover_statement",
-  "transactionTableStart": "Date Description Amount",
+  "pdfType": "fnb_cheque",
+  "pageStart": 1,
+  "skipLines": 30,           // header lines to skip on page 1 (address, account info block)
+  "skipLinesSubsequent": 3,  // header lines to skip on pages 2+ (just column header row)
+  "pattern": "(?<date>...)",
   "dateFormat": "DD MMM",
-  "amountPattern": "R\\d+\\.\\d{2}"
+  "yearHint": 2025           // year extracted from statementMonth — prevents wrong-year inference
 }
 ```
 
@@ -203,6 +219,7 @@ Fields:
 - money_in: numeric, required, default `0`
 - money_out: numeric, required, default `0`
 - net_amount: numeric, required
+- balance: real, nullable — running balance captured from bank statement row (used for reconciliation)
 - suggested_category_id: text, nullable, foreign key to categories.id
 - assigned_category_id: text, nullable, foreign key to categories.id
 - allocation_source: text, nullable, values `manual`, `rule`, `history`
@@ -256,6 +273,7 @@ Fields:
 - tax_deductible: integer, required, default `0`
 - notes: text, nullable
 - allocation_source: text, required, values `manual`, `rule`, `history`
+- balance: real, nullable — running balance from source bank statement (mirrors staged_transactions.balance)
 - created_at: text, required ISO timestamp
 - updated_at: text, required ISO timestamp
 

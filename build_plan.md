@@ -4,7 +4,7 @@
 A web-based financial allocation tool to import bank statements, stage transactions for review and categorization, and finalize them into a clean ledger for reporting and tax purposes.
 
 ## Current Phase
-Phase 2 - Foundation Data (Categories & Bank Accounts)
+Phase 5 - Ledger, Dashboard & Reports (In Progress)
 
 ## Stack
 Frontend: React + TypeScript (Vite)
@@ -48,19 +48,20 @@ Hosting: Cloudflare (Pages + Workers)
 - [ ] **Test:** Upload a sample CSV and verify rows reach the staging area safely
 
 ### Phase 4 - Review & Finalise Flow
-- [ ] Update schema with final `transactions` table
-- [ ] Build API to fetch staged transactions and patch allocations
-- [ ] Build API to create a rule from a confirmed staged transaction
-- [ ] Build API to finalise import (move staged -> final transactions)
-- [ ] Create Frontend Review/Staging page with category dropdowns and inline editing
-- [ ] Implement the "Save Draft" and "Finalise Import" actions
-- [ ] **Test:** Complete a full upload -> allocate -> finalise cycle
+- [x] Update schema with final `transactions` table
+- [x] Build API to fetch staged transactions and patch allocations
+- [x] Build API to create a rule from a confirmed staged transaction
+- [x] Build API to finalise import (move staged -> final transactions)
+- [x] Create Frontend Review/Staging page with category dropdowns and inline editing
+- [x] Implement partial "Finalise Import" action (partial flag — unallocated rows stay staged)
+- [x] **Test:** Complete a full upload -> allocate -> finalise cycle
 
 ### Phase 5 - Ledger, Dashboard & Reports
 - [ ] Build backend summary endpoints for Dashboard and basic reports
 - [ ] Build Frontend Dashboard (totals, active unallocated count, recent imports)
 - [ ] Build Frontend Transactions Ledger with simple filters and limited corrections for category and notes
 - [ ] Build simple CSV export for reports
+- [x] **Bank Reconciliation report built** — opening/closing balance per account, variance check
 - [ ] **Test:** Verify Dashboard stats update correctly after finalisation
 
 ### Phase 6 - Rules Management & V1 Follow-Up
@@ -157,3 +158,34 @@ Agent must update this section after each completed phase.
     - `/imports/:id/review` – inline category assignment, scope, tax flag, flag for review, finalize button
   - ✅ **DOCUMENTATION:** TESTING_PHASE3.md created with API examples
   - 🔄 **Next:** Apply production migrations, deploy, test end-to-end
+
+- **Evening Session — 3 May 2026 ✅**
+  - **Migration 0008:** Added `balance REAL` column to `staged_transactions` and `transactions` — captures running balance from bank statement for reconciliation use.
+  - **Bank Reconciliation feature (full stack):**
+    - `routes/reconciliation.ts` — `GET /api/reconciliation?bank_account_id=&date_from=&date_to=` returns opening balance, closing balance, total in/out, computed closing, variance, balanced flag.
+    - `src/pages/Reconciliation.tsx` — account picker + date range, waterfall table, variance indicator (green ✓ / red ⚠), 4 summary cards.
+    - `src/App.tsx` — route `/reconciliation` wired.
+    - `src/nav.ts` — "Reports" nav item points to `/reconciliation`.
+    - `index.ts` — reconciliation handler registered.
+  - **FNB PDF import — three bugs diagnosed and fixed:**
+    1. `skipLines` was applied to ALL pages → all of page 2 consumed by skip. Fixed with new `skipLinesSubsequent` field for pages 2+.
+    2. Accrued bank charges trailing column (e.g. `1.50` at end of line) broke `\s*$`. Fixed: pattern ends with `(?:\s+[\d,]+\.\d{2})?\s*$`.
+    3. Year inference used `new Date()` (May 2026) → all past dates got year 2026. Fixed: `stmtYear` extracted from `statementMonth`, passed as `yearHint` to `parsePDFDate`.
+  - **Import config wizard improvements:**
+    - `pageStart` auto-migration: old configs that stored skip count in `pageStart` are auto-corrected on `openConfig()` load (`pageStart > 5 && !skipLines` → sets `skipLines = pageStart`, `pageStart = 1`).
+    - Step 2 now shows two separate skip fields: "Lines to skip — first page" (`skipLines`) and "Lines to skip — pages 2+" (`skipLinesSubsequent`).
+    - `pageStart` input shows red warning if value exceeds actual PDF page count.
+    - Diagnostic error message improved: shows exact failure mode with per-page line counts.
+  - **ImportReview UX — standalone "+ New Category" button:**
+    - Added `quickAddStandalone` boolean state alongside existing `quickAddCatRow`.
+    - "+" button in sticky header toolbar opens same modal but does not auto-select a row after save — just adds category to all dropdowns.
+    - Per-row trigger still works and auto-selects the new category for that row.
+    - Modal save button label: "Save & Select" (per-row) vs "Save" (standalone).
+  - ✅ Clean `vite build` verified after all changes.
+
+  **Lessons Learned — Architecture & Patterns:**
+  - **PDF per-page skip config:** Plan for `skipLines` (page 1) + `skipLinesSubsequent` (pages 2+) from the start. Bank statement page 1 always has far more header lines (address, account info) than subsequent pages.
+  - **Date inference in parsers:** Never infer year from `new Date()` when parsing historical statements. Always use the statement's own month/year as the source of truth (`yearHint`).
+  - **Regex for bank statement rows:** Use optional groups for trailing columns that may or may not appear (e.g. accrued charges). End the pattern with `(?:\s+[\d,]+\.\d{2})?\s*$` not just `\s*$`.
+  - **Config schema migration strategy:** When a new field is added to a JSON config stored in DB, implement silent auto-migration on the read path (load → detect old shape → fix in-memory → let user save). Do not require manual re-configuration.
+  - **Quick-add pattern in review UIs:** Use a separate boolean flag (e.g. `quickAddStandalone`) alongside the row-id state to distinguish toolbar vs per-row invocation. Adjust post-save behavior accordingly — toolbar: add to list only; per-row: add + auto-select.
