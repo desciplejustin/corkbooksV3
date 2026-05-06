@@ -8,11 +8,14 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import { Categories } from './pages/Categories';
 import { BankAccounts } from './pages/BankAccounts';
+import { ImportTemplates } from './pages/ImportTemplates';
 import { Imports } from './pages/Imports';
 import { ImportUpload } from './pages/ImportUpload';
 import { ImportReview } from './pages/ImportReview';
 import { Transactions } from './pages/Transactions';
 import { Reconciliation } from './pages/Reconciliation';
+import { Users } from './pages/Users';
+import { RoleManagement } from './pages/RoleManagement';
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -48,11 +51,14 @@ export default function App() {
         <Route path="/dashboard" element={wrap(<Dashboard user={user} />)} />
         <Route path="/categories" element={wrap(<Categories />)} />
         <Route path="/bank-accounts" element={wrap(<BankAccounts />)} />
+        <Route path="/import-templates" element={wrap(<ImportTemplates />)} />
         <Route path="/imports" element={wrap(<Imports />)} />
         <Route path="/imports/new" element={wrap(<ImportUpload />)} />
         <Route path="/imports/:id/review" element={wrap(<ImportReview />)} />
         <Route path="/transactions" element={wrap(<Transactions />)} />
         <Route path="/reconciliation" element={wrap(<Reconciliation />)} />
+        <Route path="/users" element={wrap(<Users />)} />
+        <Route path="/role-management" element={wrap(<RoleManagement />)} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={
           <div className="flex items-center justify-center h-screen flex-col gap-4">

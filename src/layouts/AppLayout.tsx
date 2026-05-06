@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { authApi, UserPublic } from '../api';
+import { authApi, UserPublic, usersApi, UserPermissions } from '../api';
 
 interface AppLayoutProps {
   user: UserPublic;
@@ -8,18 +8,56 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { label: 'Dashboard', path: '/dashboard', icon: '◈' },
-  { label: 'Imports', path: '/imports', icon: '↑' },
-  { label: 'Transactions', path: '/transactions', icon: '≡' },
-  { label: 'Categories', path: '/categories', icon: '⊞' },
-  { label: 'Bank Accounts', path: '/bank-accounts', icon: '🏦' },
-  { label: 'Reports', path: '/reports', icon: '📊' },
+interface NavItem {
+  label: string;
+  path: string;
+  icon: string;
+  permissionId: string; // Permission identifier from database
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', path: '/dashboard', icon: '◈', permissionId: 'dashboard' },
+  { label: 'Imports', path: '/imports', icon: '↑', permissionId: 'imports' },
+  { label: 'Transactions', path: '/transactions', icon: '≡', permissionId: 'transactions' },
+  { label: 'Categories', path: '/categories', icon: '⊞', permissionId: 'categories' },
+  { label: 'Bank Accounts', path: '/bank-accounts', icon: '🏦', permissionId: 'bank-accounts' },
+  { label: 'Import Templates', path: '/import-templates', icon: '📋', permissionId: 'import-templates' },
+  { label: 'Reports', path: '/reconciliation', icon: '📊', permissionId: 'reports' },
+  { label: 'Users', path: '/users', icon: '👥', permissionId: 'users' },
+  { label: 'Role Management', path: '/role-management', icon: '🔐', permissionId: 'role-management' },
 ];
 
 export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    loadUserPermissions();
+  }, [user.id]);
+
+  async function loadUserPermissions() {
+    const response = await usersApi.getPermissions(user.id);
+    if (response.success && response.data) {
+      setPermissions(response.data.effective_permissions);
+    } else {
+      // Fallback: allow everything if permissions can't be loaded
+      console.error('Failed to load user permissions, using permissive fallback');
+      setPermissions({
+        'dashboard': true,
+        'imports': true,
+        'transactions': true,
+        'categories': true,
+        'bank-accounts': true,
+        'import-templates': true,
+        'reports': true,
+        'users': user.role === 'admin',
+        'role-management': user.role === 'admin',
+      });
+    }
+    setPermissionsLoaded(true);
+  }
 
   async function handleLogout() {
     await authApi.logout();
@@ -51,23 +89,30 @@ export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
 
         {/* Nav links */}
         <nav className="flex-1 py-3 overflow-y-auto">
-          {navItems.map(item => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                } ${collapsed ? 'justify-center' : ''}`
-              }
-              title={collapsed ? item.label : undefined}
-            >
-              <span className="text-base leading-none w-5 text-center flex-shrink-0">{item.icon}</span>
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+          {permissionsLoaded && navItems
+            .filter(item => permissions[item.permissionId] === true)
+            .map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                  } ${collapsed ? 'justify-center' : ''}`
+                }
+                title={collapsed ? item.label : undefined}
+              >
+                <span className="text-base leading-none w-5 text-center flex-shrink-0">{item.icon}</span>
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            ))}
+          {!permissionsLoaded && (
+            <div className="px-3 py-2 text-slate-400 text-sm text-center">
+              Loading menu...
+            </div>
+          )}
         </nav>
 
         {/* User / logout */}

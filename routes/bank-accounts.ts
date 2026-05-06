@@ -1,19 +1,8 @@
 // Bank Accounts API Routes
-import { Env, ApiResponse } from '../types';
+import { Env, ApiResponse, BankAccount } from '../types';
 import { authenticateRequest } from '../middleware/auth';
 import { requireAuth, requireRole } from '../middleware/rbac';
-
-interface BankAccount {
-  id: string;
-  name: string;
-  bank_name: string;
-  account_number_masked: string;
-  owner_name: string;
-  account_type: string | null;
-  is_active: number;
-  created_at: string;
-  updated_at: string;
-}
+import { getBankAccountFilter, validateBankAccountOwnership } from '../middleware/authorization';
 
 function jsonResponse<T>(data: ApiResponse<T>, status: number = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -33,9 +22,11 @@ export async function handleListBankAccounts(request: Request, env: Env): Promis
   if (authError) return authError;
 
   try {
+    // Filter by user ownership (admins see all)
+    const { condition, params } = getBankAccountFilter(user!.id, user!.role);
     const result = await env.DB.prepare(
-      'SELECT id, name, bank_name, account_number_masked, owner_name, account_type, is_active FROM bank_accounts ORDER BY name'
-    ).all<BankAccount>();
+      `SELECT id, name, bank_name, account_number_masked, owner_name, account_type, default_import_template_id, is_active, created_at, updated_at FROM bank_accounts WHERE 1=1 ${condition} ORDER BY name`
+    ).bind(...params).all<BankAccount>();
 
     return jsonResponse<BankAccount[]>({
       success: true,
@@ -56,6 +47,16 @@ export async function handleGetBankAccount(request: Request, env: Env, id: strin
   if (authError) return authError;
 
   try {
+    // Check ownership
+    const account = await validateBankAccountOwnership(user!.id, user!.role, id, env.DB);
+    
+    if (!account) {
+      return jsonResponse<null>({
+        success: false,
+        error: 'Bank account not found or access denied',
+      }, 404);
+    }
+
     const result = await env.DB.prepare(
       'SELECT * FROM bank_accounts WHERE id = ?'
     ).bind(id).first<BankAccount>();
@@ -87,7 +88,7 @@ export async function handleCreateBankAccount(request: Request, env: Env): Promi
 
   try {
     const body = await request.json() as Partial<BankAccount>;
-    const { name, bank_name, account_number_masked, owner_name, account_type } = body;
+    const { name, bank_name, account_number_masked, owner_name, account_type, default_import_template_id } = body;
 
     // Validation
     if (!name || !bank_name || !account_number_masked || !owner_name) {
@@ -109,13 +110,26 @@ export async function handleCreateBankAccount(request: Request, env: Env): Promi
       }, 409);
     }
 
+    if (default_import_template_id) {
+      const template = await env.DB.prepare(
+        'SELECT id FROM import_templates WHERE id = ? AND is_active = 1'
+      ).bind(default_import_template_id).first();
+
+      if (!template) {
+        return jsonResponse<null>({
+          success: false,
+          error: 'Default import template not found',
+        }, 404);
+      }
+    }
+
     const id = generateId('bank');
     const now = new Date().toISOString();
 
     await env.DB.prepare(
-      `INSERT INTO bank_accounts (id, name, bank_name, account_number_masked, owner_name, account_type, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
-    ).bind(id, name, bank_name, account_number_masked, owner_name, account_type || null, now, now).run();
+      `INSERT INTO bank_accounts (id, name, bank_name, account_number_masked, owner_name, account_type, default_import_template_id, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+     ).bind(id, name, bank_name, account_number_masked, owner_name, account_type || null, default_import_template_id || null, now, now).run();
 
     const created = await env.DB.prepare(
       'SELECT * FROM bank_accounts WHERE id = ?'
@@ -140,8 +154,17 @@ export async function handleUpdateBankAccount(request: Request, env: Env, id: st
   if (authError) return authError;
 
   try {
+    // Check ownership before allowing update
+    const account = await validateBankAccountOwnership(user!.id, user!.role, id, env.DB);
+    if (!account) {
+      return jsonResponse<null>({
+        success: false,
+        error: 'Bank account not found or access denied',
+      }, 404);
+    }
+
     const body = await request.json() as Partial<BankAccount>;
-    const { name, bank_name, account_number_masked, owner_name, account_type, is_active } = body;
+    const { name, bank_name, account_number_masked, owner_name, account_type, default_import_template_id, is_active } = body;
 
     // Check if bank account exists
     const existing = await env.DB.prepare(
@@ -169,28 +192,61 @@ export async function handleUpdateBankAccount(request: Request, env: Env, id: st
       }
     }
 
+    if (default_import_template_id !== undefined && default_import_template_id !== null) {
+      const template = await env.DB.prepare(
+        'SELECT id FROM import_templates WHERE id = ? AND is_active = 1'
+      ).bind(default_import_template_id).first();
+
+      if (!template) {
+        return jsonResponse<null>({
+          success: false,
+          error: 'Default import template not found',
+        }, 404);
+      }
+    }
+
     const now = new Date().toISOString();
     
+    // Build update query dynamically
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+    if (bank_name !== undefined) {
+      updates.push('bank_name = ?');
+      params.push(bank_name);
+    }
+    if (account_number_masked !== undefined) {
+      updates.push('account_number_masked = ?');
+      params.push(account_number_masked);
+    }
+    if (owner_name !== undefined) {
+      updates.push('owner_name = ?');
+      params.push(owner_name);
+    }
+    if (account_type !== undefined) {
+      updates.push('account_type = ?');
+      params.push(account_type || null);
+    }
+    if (default_import_template_id !== undefined) {
+      updates.push('default_import_template_id = ?');
+      params.push(default_import_template_id || null);
+    }
+    if (is_active !== undefined) {
+      updates.push('is_active = ?');
+      params.push(is_active);
+    }
+    
+    updates.push('updated_at = ?');
+    params.push(now);
+    params.push(id);
+    
     await env.DB.prepare(
-      `UPDATE bank_accounts 
-       SET name = COALESCE(?, name),
-           bank_name = COALESCE(?, bank_name),
-           account_number_masked = COALESCE(?, account_number_masked),
-           owner_name = COALESCE(?, owner_name),
-           account_type = COALESCE(?, account_type),
-           is_active = COALESCE(?, is_active),
-           updated_at = ?
-       WHERE id = ?`
-    ).bind(
-      name || null,
-      bank_name || null,
-      account_number_masked || null,
-      owner_name || null,
-      account_type !== undefined ? account_type : null,
-      is_active !== undefined ? is_active : null,
-      now,
-      id
-    ).run();
+      `UPDATE bank_accounts SET ${updates.join(', ')} WHERE id = ?`
+    ).bind(...params).run();
 
     const updated = await env.DB.prepare(
       'SELECT * FROM bank_accounts WHERE id = ?'
@@ -201,9 +257,10 @@ export async function handleUpdateBankAccount(request: Request, env: Env, id: st
       data: updated!,
     });
   } catch (error) {
+    console.error('Error updating bank account:', error);
     return jsonResponse<null>({
       success: false,
-      error: 'Failed to update bank account',
+      error: error instanceof Error ? error.message : 'Failed to update bank account',
     }, 500);
   }
 }

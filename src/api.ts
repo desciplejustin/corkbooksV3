@@ -16,6 +16,28 @@ export interface UserPublic {
   role: string;
 }
 
+export interface MenuItem {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
+export interface RolePermissions {
+  role: string;
+  permissions: Record<string, boolean>;
+  updated_at: string;
+}
+
+export interface UserPermissions {
+  user_id: string;
+  role: string;
+  default_permissions: Record<string, boolean>;
+  custom_permissions: Record<string, boolean> | null;
+  effective_permissions: Record<string, boolean>;
+  has_custom_permissions: boolean;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -35,7 +57,22 @@ export interface BankAccount {
   account_number_masked: string;
   owner_name: string;
   account_type: string | null;
+  default_import_template_id: string | null;
   is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImportTemplate {
+  id: string;
+  name: string;
+  template_key: string;
+  bank_name: string | null;
+  format_type: 'csv' | 'pdf' | 'ofx' | 'qif';
+  parser_config: string;
+  is_active: number;
+  is_system: number;
+  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -77,7 +114,7 @@ export interface BankImportConfig {
 export interface Import {
   id: string;
   bank_account_id: string;
-  import_config_id: string;
+  import_template_id: string;
   uploaded_by_user_id: string;
   source_filename: string;
   source_file_key: string | null;
@@ -88,6 +125,7 @@ export interface Import {
   notes: string | null;
   status: 'draft' | 'ready' | 'finalised';
   row_count: number;
+  reviewed_count?: number;
   created_at: string;
   finalised_at: string | null;
 }
@@ -220,6 +258,40 @@ export const bankAccountsApi = {
   },
 };
 
+export const importTemplatesApi = {
+  async list(options?: { includeInactive?: boolean; bankName?: string }): Promise<ApiResponse<ImportTemplate[]>> {
+    const params = new URLSearchParams();
+    if (options?.includeInactive) params.set('include_inactive', '1');
+    if (options?.bankName) params.set('bank_name', options.bankName);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<ImportTemplate[]>(`/api/import-templates${qs}`, { method: 'GET' });
+  },
+
+  async get(id: string): Promise<ApiResponse<ImportTemplate>> {
+    return apiCall<ImportTemplate>(`/api/import-templates/${id}`, { method: 'GET' });
+  },
+
+  async create(data: Partial<ImportTemplate>): Promise<ApiResponse<ImportTemplate>> {
+    return apiCall<ImportTemplate>('/api/import-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: string, data: Partial<ImportTemplate>): Promise<ApiResponse<ImportTemplate>> {
+    return apiCall<ImportTemplate>(`/api/import-templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: string): Promise<ApiResponse<null>> {
+    return apiCall<null>(`/api/import-templates/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 // Import Configs API calls
 export const importConfigsApi = {
   async list(bankAccountId?: string): Promise<ApiResponse<BankImportConfig[]>> {
@@ -306,6 +378,100 @@ export const importsApi = {
 
   downloadUrl(importId: string): string {
     return `${API_BASE_URL}/api/imports/${importId}/download`;
+  },
+};
+
+// User Management API calls (Admin only)
+export const usersApi = {
+  async list(includeInactive = false): Promise<ApiResponse<UserPublic[]>> {
+    const qs = includeInactive ? '?include_inactive=true' : '';
+    return apiCall<UserPublic[]>(`/api/users${qs}`, {
+      method: 'GET',
+    });
+  },
+
+  async get(id: string): Promise<ApiResponse<UserPublic>> {
+    return apiCall<UserPublic>(`/api/users/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  async create(data: {
+    email: string;
+    password: string;
+    full_name: string;
+    role: string;
+  }): Promise<ApiResponse<UserPublic>> {
+    return apiCall<UserPublic>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: string, data: {
+    email?: string;
+    password?: string;
+    full_name?: string;
+    role?: string;
+    is_active?: number;
+  }): Promise<ApiResponse<UserPublic>> {
+    return apiCall<UserPublic>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
+    return apiCall<{ id: string; deleted: boolean }>(`/api/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getPermissions(id: string): Promise<ApiResponse<UserPermissions>> {
+    return apiCall<UserPermissions>(`/api/users/${id}/permissions`, {
+      method: 'GET',
+    });
+  },
+
+  async updatePermissions(id: string, permissions: Record<string, boolean>): Promise<ApiResponse<any>> {
+    return apiCall(`/api/users/${id}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    });
+  },
+
+  async deletePermissions(id: string): Promise<ApiResponse<any>> {
+    return apiCall(`/api/users/${id}/permissions`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Role Management API calls (Admin only)
+export const roleManagementApi = {
+  async getMenuItems(): Promise<ApiResponse<MenuItem[]>> {
+    return apiCall<MenuItem[]>('/api/role-management/menu-items', {
+      method: 'GET',
+    });
+  },
+
+  async listRoles(): Promise<ApiResponse<RolePermissions[]>> {
+    return apiCall<RolePermissions[]>('/api/role-management/roles', {
+      method: 'GET',
+    });
+  },
+
+  async getRole(role: string): Promise<ApiResponse<RolePermissions>> {
+    return apiCall<RolePermissions>(`/api/role-management/roles/${role}`, {
+      method: 'GET',
+    });
+  },
+
+  async updateRole(role: string, permissions: Record<string, boolean>): Promise<ApiResponse<RolePermissions>> {
+    return apiCall<RolePermissions>(`/api/role-management/roles/${role}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    });
   },
 };
 

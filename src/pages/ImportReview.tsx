@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { importsApi, bankAccountsApi, categoriesApi, Import, StagedTransaction, Category, BankAccount } from '../api';
 
 type RowUpdate = {
@@ -12,6 +12,7 @@ type RowUpdate = {
 export function ImportReview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [importRecord, setImportRecord] = useState<Import | null>(null);
   const [rows, setRows] = useState<StagedTransaction[]>([]);
@@ -22,7 +23,7 @@ export function ImportReview() {
   const [finalizing, setFinalizing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('filter') || '');
   const [quickAddCatRow, setQuickAddCatRow] = useState<string | null>(null);
   const [quickAddForm, setQuickAddForm] = useState<{ name: string; category_type: 'income' | 'expense'; scope: 'personal' | 'business' | 'shared' }>({ name: '', category_type: 'expense', scope: 'personal' });
   const [quickAddSaving, setQuickAddSaving] = useState(false);
@@ -31,6 +32,7 @@ export function ImportReview() {
   const [quickAddStandalone, setQuickAddStandalone] = useState(false);
   const [autoAllocMessage, setAutoAllocMessage] = useState('');
   const [hideFinalized, setHideFinalized] = useState(false);
+  const [keepVisibleRowIds, setKeepVisibleRowIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -110,6 +112,8 @@ export function ImportReview() {
   }
 
   async function markAsTransfer(rowId: string) {
+    // Keep this row visible even if it doesn't match current filter
+    setKeepVisibleRowIds(prev => new Set(prev).add(rowId));
     await updateRow(rowId, {
       is_transfer: 1,
       review_status: 'transfer',
@@ -118,6 +122,12 @@ export function ImportReview() {
   }
 
   async function cancelTransfer(rowId: string) {
+    // Remove from keep-visible set since it's back to normal state
+    setKeepVisibleRowIds(prev => {
+      const next = new Set(prev);
+      next.delete(rowId);
+      return next;
+    });
     await updateRow(rowId, {
       is_transfer: 0,
       transfer_account_id: null,
@@ -181,7 +191,9 @@ export function ImportReview() {
   const baseRows = (hideFinalized && !filterStatus)
     ? rows.filter(r => r.review_status === 'unallocated' || r.review_status === 'needs_review')
     : rows;
-  const filtered = filterStatus ? baseRows.filter(r => r.review_status === filterStatus) : baseRows;
+  const filtered = filterStatus
+    ? baseRows.filter(r => r.review_status === filterStatus || keepVisibleRowIds.has(r.id))
+    : baseRows;
 
   const allocatedCount = rows.filter(r => r.review_status === 'allocated').length;
   const unallocatedCount = rows.filter(r => r.review_status === 'unallocated').length;
@@ -258,7 +270,10 @@ export function ImportReview() {
 
           <select
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
+            onChange={e => {
+              setFilterStatus(e.target.value);
+              setKeepVisibleRowIds(new Set()); // Clear keep-visible rows when filter changes
+            }}
             className="ml-auto border border-gray-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All {hideFinalized ? `unfinished (${baseRows.length})` : `(${rows.length})`}</option>

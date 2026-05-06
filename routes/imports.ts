@@ -1,5 +1,5 @@
 // Imports API Routes
-import { Env, Import, StagedTransaction, BankImportConfig, ApiResponse, CSVParserConfig, PDFParserConfig } from '../types';
+import { Env, Import, StagedTransaction, ImportTemplate, ApiResponse, CSVParserConfig, PDFParserConfig } from '../types';
 import { authenticateRequest } from '../middleware/auth';
 import { hasRole } from '../middleware/rbac';
 import { nanoid } from 'nanoid';
@@ -27,13 +27,31 @@ export async function handleUploadImport(request: Request, env: Env): Promise<Re
 
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const fileEntry = formData.get('file');
     const bankAccountId = formData.get('bank_account_id') as string;
     const statementMonth = formData.get('statement_month') as string; // YYYY-MM
     const notes = formData.get('notes') as string | null;
+    const templateId = formData.get('template_id') as string | null;
 
-    if (!file || !bankAccountId) {
+    if (!(fileEntry instanceof File)) {
+      return jsonResponse({ success: false, error: 'Missing uploaded file' }, 400);
+    }
+
+    const file = fileEntry;
+
+    if (!bankAccountId) {
       return jsonResponse({ success: false, error: 'Missing required fields' }, 400);
+    }
+
+    // Security: Enforce file size limit (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      return jsonResponse({ success: false, error: 'File size exceeds 10MB limit' }, 400);
+    }
+
+    // Security: Validate file type
+    const allowedTypes = ['text/csv', 'text/plain', 'application/pdf', 'application/vnd.ms-excel'];
+    if (file.type && !allowedTypes.includes(file.type)) {
+      return jsonResponse({ success: false, error: 'Invalid file type. Only CSV and PDF files are allowed.' }, 400);
     }
 
     // Validate statement month format if provided
@@ -41,33 +59,51 @@ export async function handleUploadImport(request: Request, env: Env): Promise<Re
       return jsonResponse({ success: false, error: 'Invalid statement_month format. Use YYYY-MM' }, 400);
     }
 
-    // Get active import config for this bank account
-    const importConfig = await env.DB.prepare(`
-      SELECT * FROM bank_import_configs 
-      WHERE bank_account_id = ? AND is_active = 1
+    const bankAccount = await env.DB.prepare(`
+      SELECT id, default_import_template_id
+      FROM bank_accounts
+      WHERE id = ?
       LIMIT 1
-    `).bind(bankAccountId).first<BankImportConfig>();
+    `).bind(bankAccountId).first<{ id: string; default_import_template_id: string | null }>();
 
-    if (!importConfig) {
+    if (!bankAccount) {
+      return jsonResponse({ success: false, error: 'Bank account not found' }, 404);
+    }
+
+    const resolvedTemplateId = templateId || bankAccount.default_import_template_id;
+    if (!resolvedTemplateId) {
       return jsonResponse({ 
         success: false, 
-        error: 'No active import configuration found for this bank account' 
+        error: 'No default import template linked to this bank account' 
+      }, 400);
+    }
+
+    const importTemplate = await env.DB.prepare(`
+      SELECT * FROM import_templates
+      WHERE id = ? AND is_active = 1
+      LIMIT 1
+    `).bind(resolvedTemplateId).first<ImportTemplate>();
+
+    if (!importTemplate) {
+      return jsonResponse({
+        success: false,
+        error: 'Import template not found or inactive',
       }, 400);
     }
 
     // Support CSV and PDF
-    if (importConfig.format_type !== 'csv' && importConfig.format_type !== 'pdf') {
+    if (importTemplate.format_type !== 'csv' && importTemplate.format_type !== 'pdf') {
       return jsonResponse({ 
         success: false, 
-        error: `Format type ${importConfig.format_type} not yet supported` 
+        error: `Format type ${importTemplate.format_type} not yet supported` 
       }, 400);
     }
 
     let parseResult;
 
-    if (importConfig.format_type === 'csv') {
+    if (importTemplate.format_type === 'csv') {
       const fileText = await file.text();
-      const parserConfig: CSVParserConfig = JSON.parse(importConfig.parser_config);
+      const parserConfig: CSVParserConfig = JSON.parse(importTemplate.parser_config);
       parseResult = parseCSV(fileText, parserConfig);
     } else {
       // PDF: frontend sends pre-extracted text as JSON in `extracted_text` field
@@ -81,7 +117,7 @@ export async function handleUploadImport(request: Request, env: Env): Promise<Re
       } catch {
         return jsonResponse({ success: false, error: 'extracted_text must be valid JSON' }, 400);
       }
-      const parserConfig: PDFParserConfig = JSON.parse(importConfig.parser_config);
+      const parserConfig: PDFParserConfig = JSON.parse(importTemplate.parser_config);
       // Pass statement year as a hint for DD MMM date formats so old statements
       // are not assigned the current year (e.g. Feb 2025 statement imported in 2026)
       const stmtYear = statementMonth ? parseInt(statementMonth.substring(0, 4), 10) : undefined;
@@ -122,7 +158,7 @@ export async function handleUploadImport(request: Request, env: Env): Promise<Re
 
     // Save original file to R2 regardless of format
     const fileContentForR2: string | ArrayBuffer =
-      importConfig.format_type === 'pdf'
+      importTemplate.format_type === 'pdf'
         ? await file.arrayBuffer()
         : await file.text();
 
@@ -158,18 +194,18 @@ export async function handleUploadImport(request: Request, env: Env): Promise<Re
 
     await env.DB.prepare(`
       INSERT INTO imports (
-        id, bank_account_id, import_config_id, uploaded_by_user_id,
+        id, bank_account_id, import_template_id, uploaded_by_user_id,
         source_filename, source_file_key, source_format, statement_month, 
         period_start, period_end, notes, status, row_count, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
     `).bind(
       importId,
       bankAccountId,
-      importConfig.id,
+      importTemplate.id,
       user.id,
       file.name,
       fileKey,
-      importConfig.format_type,
+      importTemplate.format_type,
       resolvedStatementMonth,
       periodStart,
       periodEnd,
@@ -246,22 +282,34 @@ export async function handleListImports(request: Request, env: Env): Promise<Res
     const bankAccountId = url.searchParams.get('bank_account_id');
     const status = url.searchParams.get('status');
 
-    let query = 'SELECT * FROM imports WHERE 1=1';
+    // Base query with ownership filter and reviewed count
+    let query = `SELECT i.*, 
+      (SELECT COUNT(*) FROM staged_transactions st 
+       WHERE st.import_id = i.id AND st.review_status != 'unallocated') as reviewed_count
+      FROM imports i 
+      INNER JOIN bank_accounts ba ON i.bank_account_id = ba.id 
+      WHERE 1=1`;
     const params: string[] = [];
+    
+    // Non-admins only see their own imports
+    if (user.role !== 'admin') {
+      query += ' AND ba.user_id = ?';
+      params.push(user.id);
+    }
 
     if (bankAccountId) {
-      query += ' AND bank_account_id = ?';
+      query += ' AND i.bank_account_id = ?';
       params.push(bankAccountId);
     }
 
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND i.status = ?';
       params.push(status);
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY i.created_at DESC';
 
-    const result = await env.DB.prepare(query).bind(...params).all<Import>();
+    const result = await env.DB.prepare(query).bind(...params).all<Import & { reviewed_count: number }>();
 
     return jsonResponse({
       success: true,
@@ -454,10 +502,9 @@ export async function handleDownloadImportFile(request: Request, env: Env, id: s
       return jsonResponse({ success: false, error: 'File no longer available in storage' }, 404);
     }
 
-    const fileContent = await object.text();
-    return new Response(fileContent, {
+    return new Response(object.body, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
         'Content-Disposition': `attachment; filename="${importRecord.source_filename}"`,
       },
     });

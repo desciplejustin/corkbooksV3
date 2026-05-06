@@ -1,5 +1,5 @@
 // R2 Storage helpers for statement file management
-import { Env } from '../types';
+import { Env, StoredStatementFile } from '../types';
 
 /**
  * Save an uploaded file to R2.
@@ -24,12 +24,16 @@ export async function saveStatementFile(
 
 /**
  * Retrieve a stored statement file from R2.
- * Returns the file text content, or null if not found.
+ * Returns the binary stream and metadata, or null if not found.
  */
-export async function getStatementFile(env: Env, key: string): Promise<string | null> {
+export async function getStatementFile(env: Env, key: string): Promise<StoredStatementFile | null> {
   const object = await env.STATEMENTS.get(key);
   if (!object) return null;
-  return object.text();
+  return {
+    body: object.body,
+    contentType: object.httpMetadata?.contentType || null,
+    filename: object.customMetadata?.originalFilename || null,
+  };
 }
 
 /**

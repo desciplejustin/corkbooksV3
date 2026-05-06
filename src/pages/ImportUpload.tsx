@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { importsApi, importConfigsApi, bankAccountsApi, BankAccount, BankImportConfig } from '../api';
+import { importsApi, importTemplatesApi, bankAccountsApi, BankAccount, ImportTemplate } from '../api';
 
 export function ImportUpload() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [templates, setTemplates] = useState<ImportTemplate[]>([]);
   const [selectedAccount, setSelectedAccount] = useState('');
-  const [importConfig, setImportConfig] = useState<BankImportConfig | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [statementMonth, setStatementMonth] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -19,8 +20,12 @@ export function ImportUpload() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    bankAccountsApi.list().then(res => {
-      if (res.success) setBankAccounts((res.data || []).filter(a => a.is_active === 1));
+    Promise.all([
+      bankAccountsApi.list(),
+      importTemplatesApi.list({ includeInactive: false }),
+    ]).then(([accountsRes, templatesRes]) => {
+      if (accountsRes.success) setBankAccounts((accountsRes.data || []).filter(a => a.is_active === 1));
+      if (templatesRes.success) setTemplates(templatesRes.data || []);
       setLoadingAccounts(false);
     });
     // Default statement month to current month (optional, can be left blank for multi-month)
@@ -28,15 +33,10 @@ export function ImportUpload() {
     setStatementMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   }, []);
 
-  async function onAccountChange(accountId: string) {
+  function onAccountChange(accountId: string) {
     setSelectedAccount(accountId);
-    setImportConfig(null);
-    if (!accountId) return;
-    const res = await importConfigsApi.list(accountId);
-    if (res.success && res.data) {
-      const active = res.data.find(c => c.is_active === 1);
-      setImportConfig(active || null);
-    }
+    const account = bankAccounts.find(item => item.id === accountId);
+    setSelectedTemplateId(account?.default_import_template_id || '');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,18 +44,19 @@ export function ImportUpload() {
     setError('');
 
     if (!selectedAccount) { setError('Please select a bank account'); return; }
-    if (!importConfig) { setError('This bank account has no import configuration set up yet'); return; }
+  if (!selectedTemplateId) { setError('Please choose an import template for this upload'); return; }
     if (!file) { setError('Please select a file'); return; }
 
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('bank_account_id', selectedAccount);
+    formData.append('template_id', selectedTemplateId);
     formData.append('statement_month', statementMonth);
     if (notes) formData.append('notes', notes);
 
     // For PDF files, extract text in the browser before uploading
-    if (importConfig.format_type === 'pdf') {
+    if (selectedTemplate?.format_type === 'pdf') {
       try {
         setExtracting(true);
         const { extractPDFPages } = await import('../utils/pdf-extractor');
@@ -82,7 +83,7 @@ export function ImportUpload() {
     navigate(`/imports/${res.data!.import.id}/review`);
   }
 
-  const selectedAccountObj = bankAccounts.find(a => a.id === selectedAccount);
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId) || null;
 
   return (
     <div className="p-6 max-w-2xl">
@@ -121,11 +122,30 @@ export function ImportUpload() {
 
         {/* Config status */}
         {selectedAccount && (
-          <div className={`px-4 py-2.5 rounded-lg text-sm ${importConfig ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            {importConfig
-              ? `✓ ${importConfig.format_type.toUpperCase()} import configured`
-              : <>⚠ No import configuration found. <Link to="/bank-accounts" className="font-semibold underline">Set it up in Bank Accounts</Link></>
+          <div className={`px-4 py-2.5 rounded-lg text-sm ${selectedTemplate ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+            {selectedTemplate
+              ? `✓ Using template: ${selectedTemplate.name} (${selectedTemplate.format_type.toUpperCase()})`
+              : <>⚠ No template linked yet. <Link to="/bank-accounts" className="font-semibold underline">Link one in Bank Accounts</Link> or <Link to="/import-templates" className="font-semibold underline">create a template</Link>.</>
             }
+          </div>
+        )}
+
+        {selectedAccount && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Import Template *</label>
+            <select
+              value={selectedTemplateId}
+              onChange={e => setSelectedTemplateId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select template…</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.name}{template.bank_name ? ` · ${template.bank_name}` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">The linked default template is preselected, but you can override it for this upload.</p>
           </div>
         )}
 
@@ -201,9 +221,9 @@ export function ImportUpload() {
         <div className="flex gap-3 pt-1">
           <button
             type="submit"
-            disabled={loading || !importConfig}
+            disabled={loading || !selectedTemplateId}
             className={`flex-1 py-2.5 text-white font-semibold rounded-lg text-sm transition-colors ${
-              loading || !importConfig ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              loading || !selectedTemplateId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {loading ? (extracting ? 'Extracting PDF…' : 'Uploading…') : 'Upload & Parse'}
@@ -218,11 +238,11 @@ export function ImportUpload() {
       </form>
 
       {/* Config hint */}
-      {importConfig && (
+      {selectedTemplate && (
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">
-          <strong className="text-gray-700">Parser config for {selectedAccountObj?.bank_name}:</strong>
+          <strong className="text-gray-700">Template config for {selectedTemplate.name}:</strong>
           <pre className="mt-2 overflow-auto text-xs">
-            {JSON.stringify(JSON.parse(importConfig.parser_config), null, 2)}
+            {JSON.stringify(JSON.parse(selectedTemplate.parser_config), null, 2)}
           </pre>
         </div>
       )}

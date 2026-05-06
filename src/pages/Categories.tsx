@@ -45,7 +45,7 @@ export function Categories() {
       scope: category.scope,
       sars_related: category.sars_related,
     });
-    setShowForm(true);
+    // Don't set showForm for edit - we'll use a modal instead
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,8 +59,15 @@ export function Categories() {
         response = await categoriesApi.create(formData);
       }
 
-      if (response.success) {
-        await loadCategories();
+      if (response.success && response.data) {
+        // Update state directly to avoid scroll jump
+        if (editingId) {
+          setCategories(prev => prev.map(cat => 
+            cat.id === editingId ? response.data! : cat
+          ));
+        } else {
+          setCategories(prev => [...prev, response.data!]);
+        }
         resetForm();
         setError(null);
       } else {
@@ -87,8 +94,12 @@ export function Categories() {
       is_active: category.is_active === 1 ? 0 : 1,
     });
 
-    if (response.success) {
-      await loadCategories();
+    if (response.success && response.data) {
+      // Update state directly to avoid scroll jump
+      setCategories(prev => prev.map(cat => 
+        cat.id === category.id ? response.data! : cat
+      ));
+      setError(null);
     } else {
       setError(response.error || 'Failed to update category');
     }
@@ -122,9 +133,9 @@ export function Categories() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && !editingId && (
         <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-xl p-5 mb-4">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">{editingId ? 'Edit Category' : 'New Category'}</h3>
+          <h3 className="text-base font-semibold text-gray-800 mb-4">New Category</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
@@ -175,13 +186,94 @@ export function Categories() {
 
           <div className="flex gap-2">
             <button type="submit" className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
-              {editingId ? 'Update' : 'Create'}
+              Create
             </button>
             <button type="button" onClick={resetForm} className="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors">
               Cancel
             </button>
           </div>
         </form>
+      )}
+
+      {/* Edit Modal */}
+      {editingId && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
+          onClick={() => resetForm()}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl p-6 w-[600px] max-w-[95vw] max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Edit Category</h2>
+              <button
+                onClick={() => resetForm()}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                  <select
+                    value={formData.category_type}
+                    onChange={(e) => setFormData({ ...formData, category_type: e.target.value as 'income' | 'expense' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Scope *</label>
+                  <select
+                    value={formData.scope}
+                    onChange={(e) => setFormData({ ...formData, scope: e.target.value as 'personal' | 'business' | 'shared' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="business">Business</option>
+                    <option value="shared">Shared</option>
+                  </select>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={formData.sars_related === 1}
+                      onChange={(e) => setFormData({ ...formData, sars_related: e.target.checked ? 1 : 0 })}
+                      className="rounded"
+                    />
+                    SARS Tax Related
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button type="submit" className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Update
+                </button>
+                <button type="button" onClick={resetForm} className="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Filters */}

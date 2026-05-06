@@ -189,3 +189,81 @@ Agent must update this section after each completed phase.
   - **Regex for bank statement rows:** Use optional groups for trailing columns that may or may not appear (e.g. accrued charges). End the pattern with `(?:\s+[\d,]+\.\d{2})?\s*$` not just `\s*$`.
   - **Config schema migration strategy:** When a new field is added to a JSON config stored in DB, implement silent auto-migration on the read path (load → detect old shape → fix in-memory → let user save). Do not require manual re-configuration.
   - **Quick-add pattern in review UIs:** Use a separate boolean flag (e.g. `quickAddStandalone`) alongside the row-id state to distinguish toolbar vs per-row invocation. Adjust post-save behavior accordingly — toolbar: add to list only; per-row: add + auto-select.
+
+- **Template-first import setup — 6 May 2026 ✅**
+  - Added reusable `import_templates` model and linked `bank_accounts.default_import_template_id` so parser setup is no longer owned by each bank account.
+  - Import upload now resolves the template from the selected account by default, with optional per-upload override for edge cases.
+  - Added dedicated frontend screen for named import templates and simplified Bank Accounts so it only manages account details plus linked template.
+  - Historical `bank_import_configs` data is migrated forward through schema migration `0010_import_templates.sql`.
+  - Statement file retrieval preserved and corrected for PDFs: download now streams the original stored file instead of reading it as text.
+
+---
+
+## Security Audit and Hardening — 6 May 2026 ✅
+
+- **Comprehensive security audit conducted** — 6 critical and high-priority vulnerabilities identified
+- **CRITICAL fixes implemented:**
+  1. ✅ **Authentication bypass removed** (routes/auth.ts)
+     - Removed hardcoded `password123` bypass that allowed login to any account
+     - Implemented proper PBKDF2 password verification using Web Crypto API
+     - Hash format: `` (SHA-256, 100k iterations)
+     - Created `utils/password.ts` for hash generation
+     - Migration 0009 updates seed user passwords (requires rotation)
+  
+  2. ✅ **CORS policy hardened** (index.ts)
+     - Removed wildcard patterns (`*.pages.dev`, contains 'corkbook')
+     - Restricted to explicit origin allowlist (localhost + production domains)
+     - No pattern matching — exact origin matches only
+  
+  3. ✅ **CSRF protection added** (middleware/csrf.ts, index.ts)
+     - Validates Origin or Referer header on all POST/PATCH/PUT/DELETE requests
+     - Returns 403 on missing/invalid origin
+     - GET/HEAD/OPTIONS requests bypass validation (read-only)
+  
+  4. ✅ **Upload security enhanced** (routes/imports.ts)
+     - 10MB file size limit enforced
+     - Content-type validation (CSV, PDF, text/plain only)
+     - Clear error messages for rejected uploads
+  
+  5. ✅ **ReDoS protection added** (utils/pdf-parser.ts)
+     - Regex pattern length limit: 500 characters
+     - Pattern analysis detects dangerous constructs (nested repeats, etc.)
+     - Validation runs before regex compilation
+  
+  6. ✅ **Object-level authorization added** (middleware/authorization.ts, multiple routes)
+     - Created authorization helpers for ownership checking
+     - Migration 0010 adds user_id to bank_accounts table
+     - Bank accounts filtered by ownership (non-admins see only their own)
+     - Imports, transactions, reconciliation all validate bank account ownership
+     - Security model: Admin sees all, Editor/Viewer see only owned data
+     - Ownership cascades: bank_accounts → imports → transactions
+  
+  7. ✅ **Login rate limiting added** (middleware/rate-limit.ts, routes/auth.ts)
+     - IP-based rate limiting: 5 attempts per 15 minutes
+     - Failed attempts blocked for 30 minutes after limit exceeded
+     - Successful login clears rate limit
+     - Returns 429 with retry-after duration
+     - Uses CF-Connecting-IP header for accurate IP tracking
+
+- **Documentation created:**
+  - `SECURITY_FIXES.md` — complete audit findings, fixes applied, testing procedures, production checklist
+  - `scripts/generate-password-hash.ts` — utility to generate PBKDF2 hashes for user management
+  - `testing_checklist.md` updated with security test cases
+
+- **⚠️ PRODUCTION ACTIONS REQUIRED:**
+  1. Apply migration 0009 to update password hashes
+  2. Apply migration 0010 to add bank account ownership (user_id column)
+  3. Assign existing bank accounts to appropriate users via SQL
+  4. Rotate JWT_SECRET in Cloudflare Workers secrets
+  5. Delete or change passwords for seed accounts (admin@corkbooks.test, editor@corkbooks.test)
+  6. Test authentication, CORS, CSRF, rate limiting, and authorization
+  7. Test upload limits and regex validation
+  8. Deploy updated code to production
+
+- **🔄 Remaining recommendations (not blocking):**
+  - MEDIUM: Add session management and revocation
+  - MEDIUM: Implement audit logging for sensitive operations
+  - MEDIUM: Migrate rate limiting to Workers KV for distributed deployments
+  - MEDIUM: Implement shared bank account access (multi-user per account)
+  - LOW: Add Content Security Policy headers
+  - LOW: Add additional secure headers (X-Frame-Options, etc.)

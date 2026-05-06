@@ -30,6 +30,12 @@ export interface UserPublic {
   role: UserRole;
 }
 
+export interface StoredStatementFile {
+  body: ReadableStream<Uint8Array> | null;
+  contentType: string | null;
+  filename: string | null;
+}
+
 export interface JWTPayload {
   userId: string;
   email: string;
@@ -89,13 +95,27 @@ export interface BankImportConfig {
   updated_at: string;
 }
 
+export interface ImportTemplate {
+  id: string;
+  name: string;
+  template_key: string;
+  bank_name: string | null;
+  format_type: ImportFormatType;
+  parser_config: string;
+  is_active: number;
+  is_system: number;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Import Types
 export type ImportStatus = 'draft' | 'ready' | 'finalised';
 
 export interface Import {
   id: string;
   bank_account_id: string;
-  import_config_id: string;
+  import_template_id: string;
   uploaded_by_user_id: string;
   source_filename: string;
   source_file_key: string | null;
@@ -106,6 +126,7 @@ export interface Import {
   notes: string | null;
   status: ImportStatus;
   row_count: number;
+  reviewed_count?: number; // Count of reviewed transactions (not pending)
   created_at: string;
   finalised_at: string | null;
 }
@@ -178,6 +199,19 @@ export interface Transaction {
   notes: string | null;
   allocation_source: AllocationSource;
   transfer_pair_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  bank_name: string;
+  account_number_masked: string;
+  owner_name: string;
+  account_type: string | null;
+  default_import_template_id: string | null;
+  is_active: number;
   created_at: string;
   updated_at: string;
 }

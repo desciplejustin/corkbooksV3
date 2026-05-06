@@ -51,6 +51,12 @@ export async function handleListTransactions(request: Request, env: Env): Promis
 
     const conditions: string[] = [];
     const params: unknown[] = [];
+    
+    // Authorization: Non-admins only see transactions from their own bank accounts
+    if (user.role !== 'admin') {
+      conditions.push('ba.user_id = ?');
+      params.push(user.id);
+    }
 
     if (bankAccountId) {
       conditions.push('t.bank_account_id = ?');

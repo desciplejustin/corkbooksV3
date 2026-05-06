@@ -23,8 +23,13 @@ export const navItems: NavItem[] = [
     requiresAuth: true,
   },
   {
+    label: 'Import Templates',
+    path: '/import-templates',
+    requiresAuth: true,
+  },
+  {
     label: 'Import',
-    path: '/import',
+    path: '/imports',
     requiresAuth: true,
   },
   {

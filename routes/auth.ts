@@ -1,6 +1,7 @@
 // Auth API Routes
 import { Env, User, UserPublic, ApiResponse } from '../types';
 import { signJWT, authenticateRequest } from '../middleware/auth';
+import { checkRateLimit, clearRateLimit, getClientIdentifier } from '../middleware/rate-limit';
 
 // Helper to create API response
 function jsonResponse<T>(data: ApiResponse<T>, status: number = 200): Response {
@@ -10,20 +11,74 @@ function jsonResponse<T>(data: ApiResponse<T>, status: number = 200): Response {
   });
 }
 
-// TODO: Implement proper bcrypt password verification for production
-// For now, using simple string comparison with pre-hashed seed data
+// Password verification using Web Crypto API (PBKDF2)
+// Hash format: $pbkdf2$iterations$salt$hash
 async function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  // Temporary: In production, use bcryptjs or compatible library
-  // For seed data testing, we'll accept 'password123' as valid
-  if (plain === 'password123') {
-    return true;
+  try {
+    // Parse the stored hash format: $pbkdf2$iterations$salt$hash
+    const parts = hash.split('$');
+    if (parts.length !== 5 || parts[1] !== 'pbkdf2') {
+      // Fallback for old bcrypt-style hashes (will fail, forcing password reset)
+      return false;
+    }
+
+    const iterations = parseInt(parts[2], 10);
+    const saltHex = parts[3];
+    const storedHash = parts[4];
+
+    // Convert hex salt to Uint8Array (without Node.js Buffer)
+    const salt = new Uint8Array(saltHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+
+    // Hash the provided password with the same salt
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(plain),
+      'PBKDF2',
+      false,
+      ['deriveBits']
+    );
+
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: iterations,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      256
+    );
+
+    const derivedHash = Array.from(new Uint8Array(derivedBits))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return derivedHash === storedHash;
+  } catch (error) {
+    console.error('Password verification error:', error);
+    return false;
   }
-  return false;
 }
 
 // POST /api/auth/login
 export async function handleLogin(request: Request, env: Env): Promise<Response> {
   try {
+    // Rate limiting: 5 attempts per 15 minutes per IP
+    const clientId = getClientIdentifier(request);
+    const rateLimit = checkRateLimit(clientId, {
+      windowMs: 15 * 60 * 1000,  // 15 minutes
+      maxAttempts: 5,
+      blockDurationMs: 30 * 60 * 1000, // Block for 30 minutes
+    });
+
+    if (!rateLimit.allowed) {
+      return jsonResponse<null>({
+        success: false,
+        error: `Too many login attempts. Please try again in ${rateLimit.retryAfter} seconds.`,
+      }, 429);
+    }
+
     const body = await request.json() as { email: string; password: string };
     const { email, password } = body;
 
@@ -48,12 +103,17 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
 
     // Verify password
     const isValid = await verifyPassword(password, result.password_hash);
+    
     if (!isValid) {
+      // Failed login - rate limit remains active
       return jsonResponse<null>({
         success: false,
         error: 'Invalid email or password',
       }, 401);
     }
+
+    // Successful login - clear rate limit for this IP
+    clearRateLimit(clientId);
 
     // Update last login
     await env.DB.prepare(

@@ -6,6 +6,7 @@
 
 import { Env, ApiResponse } from '../types';
 import { authenticateRequest } from '../middleware/auth';
+import { validateBankAccountOwnership } from '../middleware/authorization';
 
 function jsonResponse<T>(data: ApiResponse<T>, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -63,13 +64,11 @@ export async function handleGetReconciliation(request: Request, env: Env): Promi
       return jsonResponse({ success: false, error: 'date_from must be on or before date_to' }, 400);
     }
 
-    // Verify bank account exists
-    const account = await env.DB.prepare(
-      'SELECT id, name, bank_name FROM bank_accounts WHERE id = ? AND is_active = 1'
-    ).bind(bankAccountId).first<{ id: string; name: string; bank_name: string }>();
+    // Verify bank account exists and user has access
+    const account = await validateBankAccountOwnership(user.id, user.role, bankAccountId, env.DB);
 
     if (!account) {
-      return jsonResponse({ success: false, error: 'Bank account not found' }, 404);
+      return jsonResponse({ success: false, error: 'Bank account not found or access denied' }, 403);
     }
 
     // Opening balance: statement balance on the last transaction BEFORE the period

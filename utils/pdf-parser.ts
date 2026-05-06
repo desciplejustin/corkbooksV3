@@ -25,6 +25,34 @@ export function parsePDFText(
   yearHint?: number,
 ): CSVParseResult {
   try {
+    // Security: Validate regex pattern before compilation to prevent ReDoS
+    if (config.linePattern.length > 500) {
+      return {
+        success: false,
+        rows: [],
+        error: 'Pattern too long - maximum 500 characters allowed',
+        skippedRows: 0,
+      };
+    }
+
+    // Security: Check for potentially dangerous regex patterns
+    const dangerousPatterns = [
+      /(\.\*){3,}/, // Multiple .* in sequence
+      /(\.\+){3,}/, // Multiple .+ in sequence
+      /(\(\?\:.*\)){3,}/, // Nested non-capturing groups
+    ];
+    
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(config.linePattern)) {
+        return {
+          success: false,
+          rows: [],
+          error: 'Pattern contains potentially dangerous regex constructs',
+          skippedRows: 0,
+        };
+      }
+    }
+
     const regex = new RegExp(config.linePattern, 'i');
     const pageStart = (config.pageStart ?? 1) - 1; // convert to 0-based
     const skipLines = config.skipLines ?? 0;
